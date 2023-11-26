@@ -1,7 +1,13 @@
 [workspace]
-members = ["node"]
+members = [
+    "node",
+    "ledger-types",
+]
 
 resolver = "2"
 
 [workspace.dependencies]
 clap = "4.4"
+k256 = "0.13"
+names = "0.14"
+rand = "0.8"
