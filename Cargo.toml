@@ -1,0 +1,7 @@
+[workspace]
+members = ["node"]
+
+resolver = "2"
+
+[workspace.dependencies]
+clap = "4.4"
