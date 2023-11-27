@@ -10,3 +10,6 @@ ledger-types = { path = "../ledger-types" }
 ledger-transport = { path = "../ledger-transport" }
 
 clap = { workspace = true, features = ["derive"] }
+k256 = { workspace = true }
+rand = { workspace = true }
+hex = { workspace = true }

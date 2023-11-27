@@ -20,9 +20,13 @@ impl Transport {
 
     pub fn receive<T: DeserializeOwned>(&self) -> Option<T> {
         let mut buf = [0; 1536];
-        self.socket.recv(&mut buf).ok()?;
+        let (len, _) = self.socket.recv_from(&mut buf).ok()?;
 
-        let string = String::from_utf8(buf.to_vec()).ok()?;
+        let Ok(string) = String::from_utf8(buf[..len].to_vec()) else {
+            println!("failed to decode request");
+            return None;
+        };
+        
         serde_json::from_str::<T>(&string).ok()
     }
 }

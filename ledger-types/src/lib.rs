@@ -67,6 +67,17 @@ impl Block {
 
         Some(())
     }
+
+    pub fn new_genesis() -> Self {
+        Self::new(
+            BlockData {
+                prev_hash: B256::default(),
+                number: 0,
+                transactions: vec![],
+            },
+            &SigningKey::from_slice(&[42; 32]).unwrap(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +170,14 @@ impl B256 {
         } else {
             other_num.checked_sub(&self_num).unwrap()
         }
+    }
+
+    pub fn from_hex_string(s: &str) -> Option<Self> {
+        let bytes = hex::decode(s).ok()?;
+        if bytes.len() != 32 {
+            return None;
+        }
+        Some(Self(bytes.try_into().unwrap()))
     }
 }
 

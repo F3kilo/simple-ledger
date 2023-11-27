@@ -2,15 +2,10 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 
-use block::Blocks;
 use clap::{arg, Parser};
 use k256::ecdsa::SigningKey;
 use ledger_transport::Transport;
 use ledger_types::{Block, BlockData, Message, NodeInfo, Transaction, B256};
-
-use crate::block::BlockAppendResult;
-
-mod block;
 
 /// Command line parameters of the simple-ledger node.
 #[derive(Debug, Parser)]
@@ -51,7 +46,9 @@ fn main() {
     let node = Node::new(signer, node_info.clone());
 
     if let Some(other_node_socket) = params.other_node {
-        node.transport.send(other_node_socket, &Message::Hello(node_info)).unwrap();
+        node.transport
+            .send(other_node_socket, &Message::Hello(node_info))
+            .unwrap();
     }
 
     node.run();
@@ -73,14 +70,17 @@ impl Node {
         let blocks = Blocks::default();
         let pending_transactions = HashMap::new();
 
-        Self {
+        let mut node = Self {
             transport,
             info,
             signer,
             others,
             blocks,
             pending_transactions,
-        }
+        };
+
+        node.blocks.append(Block::new_genesis());
+        node
     }
 
     pub fn run(mut self) {
@@ -105,12 +105,14 @@ impl Node {
 
         // If the node is new for us, let's say hi to it.
         if replaced.is_none() && node_info.address != self.info.address {
+            self.transport
+                .send(node_info.socket, &Message::Hello(self.info.clone()));
             self.send_to_others(Message::Hello(node_info));
         }
     }
 
     fn process_transaction(&mut self, tx: Transaction) {
-        if tx.verify().is_none() {
+        if tx.verify().is_none() || self.blocks.contains_tx(tx.hash) {
             return;
         }
 
@@ -144,7 +146,7 @@ impl Node {
                 self.send_to_others(Message::SyncBlock(self.info.address, start))
             }
             BlockAppendResult::Added => self.send_to_others(Message::Block(block)),
-            BlockAppendResult::None => todo!(),
+            BlockAppendResult::None => {}
         }
     }
 
@@ -167,7 +169,7 @@ impl Node {
 
         let block = Block::new(
             BlockData {
-                prev_hash: *self.blocks.hashes.last().unwrap(),
+                prev_hash: self.blocks.last_hash(),
                 number: self.blocks.hashes.len() as u64,
                 transactions: transactions.map(|(_, tx)| tx).collect(),
             },
@@ -179,14 +181,109 @@ impl Node {
     }
 
     fn process_balance_of(&self, sender: SocketAddr, address: B256) {
+        println!("Processing balance_of from {}", address);
+
         let balance = self.blocks.balance_of(address);
         self.transport.send(sender, &balance);
     }
-
 
     fn send_to_others(&self, msg: Message) {
         for other in self.others.values() {
             self.transport.send(other.socket, &msg);
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct Blocks {
+    hashes: Vec<B256>,
+    data: HashMap<B256, Block>,
+}
+impl Blocks {
+    pub fn append(&mut self, block: Block) -> BlockAppendResult {
+        let new_block_number = block.data.number;
+        if self.hashes.is_empty() && new_block_number == 0 {
+            self.append_unchecked(block);
+            return BlockAppendResult::Added;
+        }
+
+        if new_block_number == 0 {
+            return BlockAppendResult::None;
+        }
+
+        let next_block_number = self.hashes.len() as u64;
+        match new_block_number.cmp(&next_block_number) {
+            Ordering::Equal => {
+                let prev_block_hash = self.hashes[new_block_number as usize - 1];
+                if block.data.prev_hash != prev_block_hash {
+                    return BlockAppendResult::None;
+                }
+
+                self.append_unchecked(block);
+                BlockAppendResult::Added
+            }
+            Ordering::Greater => BlockAppendResult::NeedSync(next_block_number),
+            Ordering::Less => {
+                let current_hash = self.hashes[new_block_number as usize - 1];
+                let current_block = &self.data[&current_hash];
+
+                let prev_block_hash = self.hashes[new_block_number as usize - 1];
+                let current_distance = current_block.proposer.distance(prev_block_hash);
+                let new_distance = block.proposer.distance(prev_block_hash);
+                if current_distance > new_distance {
+                    self.hashes.truncate(new_block_number as usize);
+                    self.append_unchecked(block);
+                    return BlockAppendResult::NeedSync(new_block_number + 1);
+                }
+
+                BlockAppendResult::None
+            }
+        }
+    }
+
+    pub fn last_hash(&self) -> B256 {
+        self.hashes.last().copied().unwrap_or_default()
+    }
+
+    fn append_unchecked(&mut self, block: Block) {
+        self.hashes.push(block.hash);
+        self.data.insert(block.hash, block);
+    }
+
+    pub fn data_by_number(&self, number: u64) -> Option<&Block> {
+        let hash = self.hashes.get(number as usize)?;
+        self.data.get(hash)
+    }
+
+    pub fn balance_of(&self, address: B256) -> u64 {
+        let transactions_iter = self
+            .hashes
+            .iter()
+            .flat_map(|hash| &self.data[hash].data.transactions);
+        let mut balance = 1000;
+        for transaction in transactions_iter {
+            if transaction.data.to == address {
+                balance += transaction.data.amount;
+            }
+            if transaction.from == address {
+                balance = balance.saturating_sub(transaction.data.amount);
+            }
+        }
+        balance
+    }
+
+    pub fn contains_tx(&self, hash: B256) -> bool {
+        self.hashes
+            .iter()
+            .flat_map(|hash| &self.data[hash].data.transactions)
+            .find(|tx| tx.hash == hash)
+            .is_some()
+    }
+}
+
+#[derive(Debug)]
+pub enum BlockAppendResult {
+    NeedSync(u64),
+    Added,
+    None,
 }
