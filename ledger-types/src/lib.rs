@@ -68,6 +68,7 @@ impl Block {
         Some(())
     }
 
+    /// Creates a new genesis block.
     pub fn new_genesis() -> Self {
         Self::new(
             BlockData {
@@ -80,6 +81,7 @@ impl Block {
     }
 }
 
+/// Data of a transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionData {
     pub to: B256,
@@ -87,6 +89,7 @@ pub struct TransactionData {
 }
 
 impl TransactionData {
+    /// Calculates the hash of the transaction.
     pub fn hash(&self) -> B256 {
         let mut hasher = k256::sha2::Sha256::new();
         hasher.update(self.to.0);
@@ -96,6 +99,7 @@ impl TransactionData {
     }
 }
 
+/// Signed transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub hash: B256,
@@ -105,6 +109,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// Creates new signed transaction.
     pub fn new(data: TransactionData, signer: &SigningKey) -> Self {
         let hash = data.hash();
         let signature = Signature::sign(signer, hash);
@@ -133,6 +138,7 @@ impl Transaction {
     }
 }
 
+/// A 32-bytes identifier.
 #[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct B256(pub [u8; 32]);
 
@@ -149,6 +155,7 @@ impl std::fmt::Display for B256 {
 }
 
 impl B256 {
+    /// Calculates the hash of the data using SHA256 algorithm.
     pub fn hash_of(data: impl AsRef<[u8]>) -> Self {
         let mut hasher = k256::sha2::Sha256::new();
         hasher.update(data);
@@ -156,12 +163,14 @@ impl B256 {
         Self(result.into())
     }
 
+    /// Calculates an address of the public key.
     pub fn address_of(key: &VerifyingKey) -> Self {
         let encoded_point = &key.to_encoded_point(false);
         let data = encoded_point.as_bytes();
         Self::hash_of(data)
     }
 
+    /// Found difference between two hashes.
     pub fn distance(&self, other: B256) -> U256 {
         let self_num = U256::from_be_slice(&self.0);
         let other_num = U256::from_be_slice(&other.0);
@@ -172,6 +181,7 @@ impl B256 {
         }
     }
 
+    /// Creates Self from hex string.
     pub fn from_hex_string(s: &str) -> Option<Self> {
         let bytes = hex::decode(s).ok()?;
         if bytes.len() != 32 {
@@ -181,6 +191,7 @@ impl B256 {
     }
 }
 
+/// Information about a node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub name: String,
@@ -188,6 +199,7 @@ pub struct NodeInfo {
     pub socket: SocketAddr,
 }
 
+/// Recovering signature for some data.
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Signature {
     pub r: B256,
@@ -195,6 +207,7 @@ pub struct Signature {
     pub recovery_id: u8,
 }
 impl Signature {
+    /// Creates new signature.
     fn sign(signer: &SigningKey, hash: B256) -> Self {
         let (sig, ver) = signer
             .sign_prehash(&hash.0)
@@ -207,6 +220,7 @@ impl Signature {
         }
     }
 
+    /// Recover the address of the signer.
     pub fn recover(&self, hash: B256) -> Option<B256> {
         let (recoverable_sig, recovery_id) = self.as_signature();
         let verify_key =
@@ -232,6 +246,7 @@ impl Signature {
     }
 }
 
+/// Message that node can process.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
     Hello(NodeInfo),

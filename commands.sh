@@ -8,3 +8,5 @@ cargo run -p client -- --socket "127.0.0.1:60000" --key "2f0177270629ec8840dc5b9
 
 # Balance
 cargo run -p client -- --socket "127.0.0.1:60000" --key "2f0177270629ec8840dc5b9fc424f611a84259f72e4769f26f88fb69bf855e64" --node "127.0.0.1:50000" --balance
+
+# https://otus.pw/NwJ9/

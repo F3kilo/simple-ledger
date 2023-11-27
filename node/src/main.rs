@@ -100,11 +100,12 @@ impl Node {
     }
 
     fn process_hello(&mut self, node_info: NodeInfo) {
-        println!("Got hello from {}", node_info.name);
         let replaced = self.others.insert(node_info.address, node_info.clone());
 
         // If the node is new for us, let's say hi to it.
         if replaced.is_none() && node_info.address != self.info.address {
+            println!("Got hello from {}", node_info.name);
+
             self.transport
                 .send(node_info.socket, &Message::Hello(self.info.clone()));
             self.send_to_others(Message::Hello(node_info));
@@ -157,6 +158,7 @@ impl Node {
 
         println!("Got sync block from {}", sender_info.name);
 
+        // Send blocks after the start to request sender.
         for i in start..self.blocks.hashes.len() as u64 {
             let block = self.blocks.data_by_number(i).unwrap();
             println!("Sending sync block response {}", block.hash);
