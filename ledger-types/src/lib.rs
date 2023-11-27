@@ -219,6 +219,7 @@ pub enum Message {
     Transaction(Transaction),
     Block(Block),
     SyncBlock(B256, u64),
+    BalanceOf(SocketAddr, B256),
 }
 
 #[cfg(test)]

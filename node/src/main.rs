@@ -85,6 +85,7 @@ impl Node {
             Message::Transaction(tx) => self.process_transaction(tx),
             Message::Block(block) => self.process_block(block),
             Message::SyncBlock(sender, start) => self.process_sync_block(sender, start),
+            Message::BalanceOf(sender, address) => self.process_balance_of(sender, address),
         }
     }
 
@@ -99,6 +100,10 @@ impl Node {
 
     fn process_transaction(&mut self, tx: Transaction) {
         if tx.verify().is_none() {
+            return;
+        }
+
+        if self.blocks.balance_of(tx.from) < tx.data.amount {
             return;
         }
 
@@ -160,6 +165,11 @@ impl Node {
         self.blocks.append_unchecked(block.clone());
         self.send_to_others(Message::Block(block));
     }
+
+    fn process_balance_of(&self, sender: SocketAddr, address: B256) {
+        let balance = self.blocks.balance_of(address);
+        self.transport.send(sender, &balance);
+    }
 }
 
 #[derive(Debug, Default)]
@@ -216,6 +226,20 @@ impl Blocks {
     pub fn data_by_number(&self, number: u64) -> Option<&Block> {
         let hash = self.hashes.get(number as usize)?;
         self.data.get(hash)
+    }
+
+    fn balance_of(&self, address: B256) -> u64 {
+        let transactions_iter = self.hashes.iter().map(|hash| &self.data[hash].data.transactions).flatten();
+        let mut balance = 0;
+        for transaction in transactions_iter {
+            if transaction.data.to == address {
+                balance += transaction.data.amount;
+            }
+            if transaction.from == address {
+                balance = balance.saturating_sub(transaction.data.amount);
+            }
+        }
+        balance
     }
 }
 
