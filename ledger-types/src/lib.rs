@@ -5,8 +5,9 @@ use k256::elliptic_curve::consts::U32;
 use k256::elliptic_curve::generic_array::GenericArray;
 use k256::schnorr::signature::hazmat::PrehashSigner;
 use k256::sha2::Digest;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BlockData {
     pub prev_hash: B256,
     pub number: u64,
@@ -27,7 +28,7 @@ impl BlockData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Block {
     pub hash: B256,
     pub data: BlockData,
@@ -66,7 +67,7 @@ impl Block {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionData {
     pub to: B256,
     pub amount: u64,
@@ -84,7 +85,7 @@ impl TransactionData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction {
     pub hash: B256,
     pub from: B256,
@@ -121,8 +122,22 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub struct B256(pub [u8; 32]);
+
+impl std::fmt::Debug for B256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "B256({})", hex::encode(self.0))
+    }
+}
+
+impl std::fmt::Display for B256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
+    }
+}
 
 impl B256 {
     pub fn hash_of(data: impl AsRef<[u8]>) -> Self {
@@ -139,14 +154,14 @@ impl B256 {
     }
 }
 
-
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub name: String,
     pub address: B256,
     pub socket: SocketAddr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Signature {
     pub r: B256,
     pub s: B256,
@@ -188,6 +203,13 @@ impl Signature {
         let sig = K256Signature::from_scalars(*r, *s).unwrap();
         (sig, recovery_id)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Message {
+    Hello(NodeInfo),
+    Transaction(Transaction),
+    Block(Block),
 }
 
 #[cfg(test)]

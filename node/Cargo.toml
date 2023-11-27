@@ -7,8 +7,10 @@ edition = "2021"
 
 [dependencies]
 ledger-types = { path = "../ledger-types" }
+ledger-transport = { path = "../ledger-transport" }
 
 k256 = { workspace = true }
 rand = { workspace = true }
 names = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
