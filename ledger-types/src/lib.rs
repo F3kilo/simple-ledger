@@ -1,13 +1,15 @@
 use std::net::SocketAddr;
 
 use k256::ecdsa::{RecoveryId, Signature as K256Signature, SigningKey, VerifyingKey};
+use k256::elliptic_curve::bigint::CheckedSub;
 use k256::elliptic_curve::consts::U32;
 use k256::elliptic_curve::generic_array::GenericArray;
 use k256::schnorr::signature::hazmat::PrehashSigner;
 use k256::sha2::Digest;
+use k256::U256;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockData {
     pub prev_hash: B256,
     pub number: u64,
@@ -17,10 +19,10 @@ pub struct BlockData {
 impl BlockData {
     pub fn hash(&self) -> B256 {
         let mut hasher = k256::sha2::Sha256::new();
-        hasher.update(&self.prev_hash.0);
+        hasher.update(self.prev_hash.0);
 
         for tx in &self.transactions {
-            hasher.update(&tx.hash.0);
+            hasher.update(tx.hash.0);
         }
 
         let result = hasher.finalize();
@@ -28,7 +30,7 @@ impl BlockData {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub hash: B256,
     pub data: BlockData,
@@ -67,25 +69,23 @@ impl Block {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionData {
     pub to: B256,
     pub amount: u64,
-    pub nonce: u64,
 }
 
 impl TransactionData {
     pub fn hash(&self) -> B256 {
         let mut hasher = k256::sha2::Sha256::new();
-        hasher.update(&self.to.0);
-        hasher.update(&self.amount.to_be_bytes());
-        hasher.update(&self.nonce.to_be_bytes());
+        hasher.update(self.to.0);
+        hasher.update(self.amount.to_be_bytes());
         let result = hasher.finalize();
         B256(result.into())
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub hash: B256,
     pub from: B256,
@@ -122,9 +122,7 @@ impl Transaction {
     }
 }
 
-#[derive(
-    Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct B256(pub [u8; 32]);
 
 impl std::fmt::Debug for B256 {
@@ -152,16 +150,26 @@ impl B256 {
         let data = encoded_point.as_bytes();
         Self::hash_of(data)
     }
+
+    pub fn distance(&self, other: B256) -> U256 {
+        let self_num = U256::from_be_slice(&self.0);
+        let other_num = U256::from_be_slice(&other.0);
+        if self_num > other_num {
+            self_num.checked_sub(&other_num).unwrap()
+        } else {
+            other_num.checked_sub(&self_num).unwrap()
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub name: String,
     pub address: B256,
     pub socket: SocketAddr,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Signature {
     pub r: B256,
     pub s: B256,
@@ -210,6 +218,7 @@ pub enum Message {
     Hello(NodeInfo),
     Transaction(Transaction),
     Block(Block),
+    SyncBlock(B256, u64),
 }
 
 #[cfg(test)]

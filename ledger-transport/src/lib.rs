@@ -15,7 +15,7 @@ impl Transport {
 
     pub fn send(&self, to: impl ToSocketAddrs, msg: &impl Serialize) -> Option<usize> {
         let string = serde_json::to_string(msg).ok()?;
-        self.socket.send_to(&string.as_bytes(), to).ok()
+        self.socket.send_to(string.as_bytes(), to).ok()
     }
 
     pub fn receive<T: DeserializeOwned>(&self) -> Option<T> {
