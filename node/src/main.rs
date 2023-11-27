@@ -20,7 +20,7 @@ struct Params {
 
     /// Socket address of another working node.
     #[clap(short, long)]
-    other_node: SocketAddr,
+    other_node: Option<SocketAddr>,
 }
 
 fn main() {
@@ -44,6 +44,11 @@ fn main() {
         node_info.name, node_info.socket
     );
     let node = Node::new(signer, node_info.clone());
+
+    if let Some(other_node_socket) = params.other_node {
+        node.transport.send(other_node_socket, &Message::Hello(node_info)).unwrap();
+    }
+
     node.run();
 }
 
@@ -90,6 +95,7 @@ impl Node {
     }
 
     fn process_hello(&mut self, node_info: NodeInfo) {
+        println!("Got hello from {}", node_info.name);
         let replaced = self.others.insert(node_info.address, node_info.clone());
 
         // If the node is new for us, let's say hi to it.
@@ -102,6 +108,8 @@ impl Node {
         if tx.verify().is_none() {
             return;
         }
+
+        println!("Got tx {}", tx.hash);
 
         if self.blocks.balance_of(tx.from) < tx.data.amount {
             return;
@@ -121,6 +129,8 @@ impl Node {
             return;
         }
 
+        println!("Got block {}", block.hash);
+
         let block_append_result = self.blocks.append(block.clone());
 
         // If the block is new for us, let's broadcast it.
@@ -138,15 +148,12 @@ impl Node {
             return;
         };
 
+        println!("Got sync block from {}", sender_info.name);
+
         for i in start..self.blocks.hashes.len() as u64 {
             let block = self.blocks.data_by_number(i).unwrap();
+            println!("Sending sync block response {}", block.hash);
             self.transport.send(sender_info.socket, block);
-        }
-    }
-
-    fn send_to_others(&self, msg: Message) {
-        for other in self.others.values() {
-            self.transport.send(other.socket, &msg);
         }
     }
 
@@ -169,6 +176,13 @@ impl Node {
     fn process_balance_of(&self, sender: SocketAddr, address: B256) {
         let balance = self.blocks.balance_of(address);
         self.transport.send(sender, &balance);
+    }
+
+
+    fn send_to_others(&self, msg: Message) {
+        for other in self.others.values() {
+            self.transport.send(other.socket, &msg);
+        }
     }
 }
 
