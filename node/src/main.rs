@@ -229,7 +229,10 @@ impl Blocks {
     }
 
     fn balance_of(&self, address: B256) -> u64 {
-        let transactions_iter = self.hashes.iter().map(|hash| &self.data[hash].data.transactions).flatten();
+        let transactions_iter = self
+            .hashes
+            .iter()
+            .flat_map(|hash| &self.data[hash].data.transactions);
         let mut balance = 0;
         for transaction in transactions_iter {
             if transaction.data.to == address {
